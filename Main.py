@@ -280,6 +280,20 @@ def delete_old_versions(s3_client, bucket_name, file_name, days):
                 Bucket=bucket_name, Key=file_name, VersionId=version_id)
             print(f'The version {version_id} has been deleted as it was created more than {days} days ago')
 
+def upload_html_file(s3_client, bucket_name, file_path, object_key):
+    with open(file_path, 'rb') as f:
+        s3_client.upload_fileobj(f, bucket_name, object_key, ExtraArgs={
+                                'ContentType': 'text/html'})
+
+def configure_static_website(s3_client, bucket_name):
+    website_configuration = {
+        'ErrorDocument': {'Key': 'error.html'},
+        'IndexDocument': {'Suffix': 'index.html'},
+    }
+    s3_client.put_bucket_website(
+        Bucket=bucket_name, WebsiteConfiguration=website_configuration)
+    print("Static website hosted successfully!")
+
 if __name__ == "__main__":
     s3_client = init_client()
 
@@ -342,3 +356,6 @@ if args.tool == "upload_file_to_s3_with_magic":
                       args.file_name, args.filepath)
 if args.tool == "delete_old_versions" or args.tool == "dov":
     delete_old_versions(args.s3_client, args.bucket_name, args.file_name, args.days)
+if args.tool == "static_website" or args.tool == "sw":
+    upload_html_file(s3_client, args.bucket_name, args.filepath, args.file_name)
+    configure_static_website(s3_client, args.bucket_name)
