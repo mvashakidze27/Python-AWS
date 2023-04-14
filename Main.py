@@ -212,6 +212,45 @@ def delete_file(s3_client, bucket_name, file_name):
         Bucket=args.bucket_name, Key=args.file_name)
     print(f'{args.file_name} file has just been deleted')
 
+def previous_version(s3_client, bucket_name, file_name):
+    try:
+        response = s3_client.get_object(
+            Bucket=args.bucket_name, Key=args.file_name)
+        latest_version_id = response['VersionId']
+        response = s3_client.list_object_versions(
+            Bucket=args.bucket_name, Prefix=args.file_name)
+        previous_version_id = response['Versions'][1]['VersionId']
+        response = s3_client.copy_object(
+            Bucket=args.bucket_name,
+            Key=args.file_name,
+            CopySource={'Bucket': args.bucket_name, 'Key': args.file_name, 'VersionId': previous_version_id})
+        print(f'{args.file_name} converted to the previous version')
+    except:
+        print(f'{args.file_name} couldn\'t convert to the previous version')
+
+
+def list_of_versions(s3_client, bucket_name, file_name):
+    response = s3_client.list_object_versions(
+        Bucket=args.bucket_name, Prefix=args.file_name)
+    num_versions = len(response['Versions'])
+    dates = [v['LastModified'] for v in response['Versions']]
+    print(f'Bucket name: {args.bucket_name}')
+    print(f'File name: {args.file_name}')
+    print(f'Number of versions: {num_versions}')
+    print('Creation dates of versions:')
+    for date in dates:
+        print(date)
+
+
+def versioning(s3_client, bucket_name):
+    output = s3_client.get_bucket_versioning(Bucket=args.bucket_name,)
+    try:
+        status = output['Status']
+        print(f'On bucket {args.bucket_name} versioning is turned on')
+    except:
+        print(f'On bucket {args.bucket_name} versioning is turned off')
+
+
 if __name__ == "__main__":
     s3_client = init_client()
 
@@ -263,3 +302,9 @@ if args.tool == 'file_with_bigsize_upload':
         print(f'{meme} uploading file with such exstension is impossible')
 if args.delete == True:
     delete_file(s3_client, args.bucket_name, args.file_name)
+if args.versioning == True:
+    versioning(s3_client, args.bucket_name)
+if args.versionlist == True:
+    list_of_versions(s3_client, args.bucket_name, args.file_name)
+if args.previous_version == True:
+    previous_version(s3_client, args.bucket_name, args.file_name)
