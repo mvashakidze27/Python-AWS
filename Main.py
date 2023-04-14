@@ -7,19 +7,10 @@ import logging
 from botocore.exceptions import ClientError
 from boto3.s3.transfer import TransferConfig
 import argparse
-import json
 import magic
-import os
+from datetime import date, datetime
 import logging
-import errno
-import sys
-import os
-import threading
-import ntpath
 from pathlib import Path
-from urllib.request import urlopen, Request
-from random import choice
-
 
 load_dotenv()
 
@@ -38,6 +29,13 @@ parser.add_argument('--days', '-d', type=int,
                     help='The amount of days after when object will be deleted')
 parser.add_argument('-del', dest='delete',
                     action='store_true', help='Delete the file')
+parser.add_argument('-vers', dest='versioning',
+                    action='store_true', help='to check version')
+parser.add_argument('-verslist', dest='versionlist',
+                    action='store_true', help='version list')
+parser.add_argument('-previous_version', dest='previous_version',
+                    action='store_true', help='Returning back to previous version')
+
 
 args = parser.parse_args()
 s3 = boto3.client('s3')
@@ -258,6 +256,30 @@ def upload_file_to_s3_with_magic(s3_client, bucket_name, file_name, file_path):
         print(f'{file_name} has been successfully uploaded to {bucket_name}')
 
 
+
+
+def delete_old_versions(s3_client, bucket_name, file_name, days):
+    response = s3_client.list_object_versions(
+        Bucket=bucket_name, Prefix=file_name)
+    versions = response.get('Versions', [])
+    today = str(date.today())
+
+    for version in versions:
+        version_id = version['VersionId']
+        response = s3_client.head_object(
+            Bucket=bucket_name, Key=file_name, VersionId=version_id)
+        last_modified = response['LastModified']
+        last_modified_date = str(last_modified.date())
+        last_modified_datetime = datetime.strptime(
+            last_modified_date, "%Y-%m-%d")
+        today_datetime = datetime.strptime(today, "%Y-%m-%d")
+        delta = today_datetime - last_modified_datetime
+
+        if delta.days > days:
+            s3_client.delete_object(
+                Bucket=bucket_name, Key=file_name, VersionId=version_id)
+            print(f'The version {version_id} has been deleted as it was created more than {days} days ago')
+
 if __name__ == "__main__":
     s3_client = init_client()
 
@@ -318,3 +340,5 @@ if args.previous_version == True:
 if args.tool == "upload_file_to_s3_with_magic":
     upload_file_to_s3_with_magic(s3_client, args.bucket_name,
                       args.file_name, args.filepath)
+if args.tool == "delete_old_versions" or args.tool == "dov":
+    delete_old_versions(args.s3_client, args.bucket_name, args.file_name, args.days)
