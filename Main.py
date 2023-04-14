@@ -64,7 +64,7 @@ def create_bucket(s3_client, bucket_name, region=getenv("aws_region_name")):
     try:
         location = {'LocationConstraint': region}
         response = s3_client.create_bucket(
-            Bucket=args.bucket_name,
+            Bucket=bucket_name,
             CreateBucketConfiguration=location
         )
     except ClientError as e:
@@ -106,7 +106,7 @@ def generate_public_read_policy(bucket_name):
 
 def delete_bucket(s3_client, bucket_name):
     try:
-        response = s3_client.delete_bucket(Bucket=args.bucket_name)
+        response = s3_client.delete_bucket(Bucket=bucket_name)
     except ClientError as e:
         logging.error(e)
         return False
@@ -120,19 +120,18 @@ def download_upload(s3_client, bucket_name, url, file_name, keep_local=False):
     from urllib.request import urlopen
     import urllib
     import io
-    url = args.url
     format = urllib.request.urlopen(url).info()['content-type']
     format = format.split('/')
     formatlist = ["jpg", "jpeg", "png", "webp", "mp4"]
     if format[1] in formatlist:
-        with urlopen(args.url) as response:
+        with urlopen(url) as response:
             content = response.read()
             try:
                 s3_client.upload_fileobj(
                     Fileobj=io.BytesIO(content),
-                    Bucket=args.bucket_name,
+                    Bucket=bucket_name,
                     ExtraArgs={'ContentType': 'image/jpg'},
-                    Key=args.file_name
+                    Key=file_name
                 )
                 print("your picture has just been uploaded")
             except Exception as e:
@@ -151,24 +150,24 @@ def download_upload(s3_client, bucket_name, url, file_name, keep_local=False):
 
 
 def file_with_bigsize_upload(s3_client, bucket_name, file_name, file_path, threshold):
-    config = TransferConfig(threshold=args.threshold)
-    with open(args.filepath, 'rb') as f:
-        object_key = args.file_name or args.file_path.split('/')[-1]
+    config = TransferConfig(threshold=threshold)
+    with open(filepath, 'rb') as f:
+        object_key = file_name or file_path.split('/')[-1]
         s3_client.upload_fileobj(
-            f, args.bucket_name, object_key, Config=config)
-    print(f'{args.file_name} was uploaded successfully')
+            f, bucket_name, object_key, Config=config)
+    print(f'{file_name} was uploaded successfully')
 
 def create_bucket_policy(s3_client, bucket_name):
     s3_client.put_bucket_policy(
         Bucket=bucket_name, Policy=generate_public_read_policy(
-            args.bucket_name)
+            bucket_name)
     )
     print("Bucket policy was created successfully")
 
 
 def read_bucket_policy(s3_client, bucket_name):
     try:
-        policy = s3_client.get_bucket_policy(Bucket=args.bucket_name)
+        policy = s3_client.get_bucket_policy(Bucket=bucket_name)
         policy_str = policy["Policy"]
         print(policy_str)
     except ClientError as e:
@@ -179,8 +178,8 @@ def set_object_access_policy(s3_client, bucket_name, file_name):
     try:
         response = s3_client.put_object_acl(
             ACL="public-read",
-            Bucket=args.bucket_name,
-            Key=args.file_name
+            Bucket=bucket_name,
+            Key=file_name
         )
     except ClientError as e:
         logging.error(e)
@@ -194,48 +193,48 @@ def lifecycle(s3_client, bucket_name, days):
     lifecycle_config = {
         'Rules': [
             {
-                'ID': 'Delete after {} days'.format(args.days),
+                'ID': 'Delete after {} days'.format(days),
                 'Status': 'Enabled',
                 'Prefix': '',
                 'Expiration': {
-                    'Days': args.days
+                    'Days': days
                 }
             }
         ]
     }
     s3_client.put_bucket_lifecycle_configuration(
-        Bucket=args.bucket_name, LifecycleConfiguration=lifecycle_config)
-    print(f'Bucket {args.bucket_name} will be deleted in {args.days} days ')
+        Bucket=bucket_name, LifecycleConfiguration=lifecycle_config)
+    print(f'Bucket {bucket_name} will be deleted in {days} days ')
 
 def delete_file(s3_client, bucket_name, file_name):
     response = s3_client.delete_object(
-        Bucket=args.bucket_name, Key=args.file_name)
-    print(f'{args.file_name} file has just been deleted')
+        Bucket=bucket_name, Key=file_name)
+    print(f'{file_name} file has just been deleted')
 
 def previous_version(s3_client, bucket_name, file_name):
     try:
         response = s3_client.get_object(
-            Bucket=args.bucket_name, Key=args.file_name)
+            Bucket=bucket_name, Key=file_name)
         latest_version_id = response['VersionId']
         response = s3_client.list_object_versions(
-            Bucket=args.bucket_name, Prefix=args.file_name)
+            Bucket=bucket_name, Prefix=file_name)
         previous_version_id = response['Versions'][1]['VersionId']
         response = s3_client.copy_object(
-            Bucket=args.bucket_name,
-            Key=args.file_name,
-            CopySource={'Bucket': args.bucket_name, 'Key': args.file_name, 'VersionId': previous_version_id})
-        print(f'{args.file_name} converted to the previous version')
+            Bucket=bucket_name,
+            Key=file_name,
+            CopySource={'Bucket': bucket_name, 'Key': file_name, 'VersionId': previous_version_id})
+        print(f'{file_name} converted to the previous version')
     except:
-        print(f'{args.file_name} couldn\'t convert to the previous version')
+        print(f'{file_name} couldn\'t convert to the previous version')
 
 
 def list_of_versions(s3_client, bucket_name, file_name):
     response = s3_client.list_object_versions(
-        Bucket=args.bucket_name, Prefix=args.file_name)
+        Bucket=bucket_name, Prefix=file_name)
     num_versions = len(response['Versions'])
     dates = [v['LastModified'] for v in response['Versions']]
-    print(f'Bucket name: {args.bucket_name}')
-    print(f'File name: {args.file_name}')
+    print(f'Bucket name: {bucket_name}')
+    print(f'File name: {file_name}')
     print(f'Number of versions: {num_versions}')
     print('Creation dates of versions:')
     for date in dates:
@@ -243,12 +242,20 @@ def list_of_versions(s3_client, bucket_name, file_name):
 
 
 def versioning(s3_client, bucket_name):
-    output = s3_client.get_bucket_versioning(Bucket=args.bucket_name,)
+    output = s3_client.get_bucket_versioning(Bucket=bucket_name,)
     try:
         status = output['Status']
-        print(f'On bucket {args.bucket_name} versioning is turned on')
+        print(f'On bucket {bucket_name} versioning is turned on')
     except:
-        print(f'On bucket {args.bucket_name} versioning is turned off')
+        print(f'On bucket {bucket_name} versioning is turned off')
+
+def upload_file_to_s3_with_magic(s3_client, bucket_name, file_name, file_path):
+    file_mime_type = magic.from_file(file_path, mime=True)
+    file_extension = file_mime_type.split('/')[-1] + '/' + file_name
+    
+    with open(file_path, 'rb') as file:
+        s3_client.upload_fileobj(file, bucket_name, file_extension)
+        print(f'{file_name} has been successfully uploaded to {bucket_name}')
 
 
 if __name__ == "__main__":
@@ -308,3 +315,6 @@ if args.versionlist == True:
     list_of_versions(s3_client, args.bucket_name, args.file_name)
 if args.previous_version == True:
     previous_version(s3_client, args.bucket_name, args.file_name)
+if args.tool == "upload_file_to_s3_with_magic":
+    upload_file_to_s3_with_magic(s3_client, args.bucket_name,
+                      args.file_name, args.filepath)
