@@ -294,12 +294,30 @@ def configure_static_website(s3_client, bucket_name):
         Bucket=bucket_name, WebsiteConfiguration=website_configuration)
     print("Static website hosted successfully!")
 
+def upload_source_to_s3(s3_client, bucket_name, local_folder_path):
+    for root, dirs, files in os.walk(local_folder_path):
+        for file in files:
+            local_file_path = os.path.join(root, file)
+            s3_key = os.path.relpath(
+                local_file_path, local_folder_path).replace('\\', '/')
+            s3_client.upload_source(local_file_path, bucket_name, s3_key, ExtraArgs={
+                                  'ContentType': 'text/html'})
+
+def create_and_configure_bucket(s3_client, bucket_name):
+    s3_client.create_bucket(Bucket=bucket_name)
+    create_bucket_policy(s3_client, bucket_name)
+    configure_static_website(s3_client, bucket_name)
+
+def get_s3_website_url(s3_client, bucket_name):
+    response = s3_client.get_bucket_location(Bucket=bucket_name)
+    region = response.get('LocationConstraint', 'us-east-1')
+    return f"http://{bucket_name}.s3-website-{region}.amazonaws.com"
+
+
 if __name__ == "__main__":
     s3_client = init_client()
 
-
 response = s3_client.list_buckets()
-
 
 for bucket in s3_client.list_buckets()['Buckets']:
     if bucket['Name'] == args.bucket_name:
@@ -354,8 +372,12 @@ if args.previous_version == True:
 if args.tool == "upload_file_to_s3_with_magic":
     upload_file_to_s3_with_magic(s3_client, args.bucket_name,
                       args.file_name, args.filepath)
-if args.tool == "delete_old_versions" or args.tool == "dov":
+if args.tool == "delete_old_versions":
     delete_old_versions(args.s3_client, args.bucket_name, args.file_name, args.days)
-if args.tool == "static_website" or args.tool == "sw":
+if args.tool == "static_website":
     upload_html_file(s3_client, args.bucket_name, args.filepath, args.file_name)
     configure_static_website(s3_client, args.bucket_name)
+if args.tool == "upload_and_host":
+    create_and_configure_bucket(args.s3_client, args.bucket_name)
+    upload_source_to_s3(args.s3_client, args.bucket_name, args.filepath)
+    print(get_s3_website_url(args.s3_client, args.bucket_name))
