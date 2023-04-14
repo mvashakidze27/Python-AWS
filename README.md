@@ -2,24 +2,37 @@ The Python-AWS folder was created for AWS Cloud Automation with Python.
 
 Bucket
 
-Create bucket python main.py bucket "any-name-for-s3" -cb
+Creating bucket
 
-Create bucket and Enable Versining python main.py bucket "bucket-with-vers-2" -cb -vers True
+Listing buckets
 
-Organize bucket per extensions python main.py bucket "bucket-with-vers" -o_b
+Checking bucket existence
 
-Object Upload local object from /static folder.
+Deleting Bucket
 
-python main.py object "bucket-with-vers" --local_object "important.txt" --upload_type "upload_file"
+Generating public read policy
 
-Upload object link.
+Creating bucket policies
 
-python main.py object bucket_name "new-bucket-btu-7" -ol "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4" -du
+Setting object access policies
 
-List object versions
+Lifecycle
 
-python main.py object "important.txt" "bucket-with-vers" -l_v
+Uploading file or files to bucket
 
-Rollback to version
+Uploading object link
 
-python main.py object "important.txt" "bucket-with-vers" -r_b_t "En8tj6pxH3nduvOzGpEs5RP5QN6M5UQ6"
+Enabling Versioning 
+
+Listing object versions
+
+Uploading files to s3 with magic
+
+Checking versions of files and deleting older versions
+
+Website configurations 
+
+Permissions
+
+
+
