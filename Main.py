@@ -17,7 +17,6 @@ import os
 import threading
 import ntpath
 from pathlib import Path
-from hurry.filesize import size, si
 from urllib.request import urlopen, Request
 from random import choice
 
@@ -31,7 +30,8 @@ parser.add_argument('--url', type=str,
                     help='Website link for downloading a file')
 parser.add_argument('--file_name', "-fn", type=str,
                     help='Name of the uploaded file')
-parser.add_argument('--file_path', "-fp", type=str, help='The path of file for uploading')
+parser.add_argument('--file_path', "-fp", type=str,
+                    help='The path of file for uploading')
 parser.add_argument('--threshold', "-mth", type=int, default=1024 *
                     1024 * 1024, help='Threshold in bytes (default values is 1GB)')
 parser.add_argument('--days', '-d', type=int,
@@ -158,6 +158,59 @@ def file_with_bigsize_upload(s3_client, bucket_name, file_name, file_path, thres
             f, args.bucket_name, object_key, Config=config)
     print(f'{args.file_name} was uploaded successfully')
 
+def create_bucket_policy(s3_client, bucket_name):
+    s3_client.put_bucket_policy(
+        Bucket=bucket_name, Policy=generate_public_read_policy(
+            args.bucket_name)
+    )
+    print("Bucket policy was created successfully")
+
+
+def read_bucket_policy(s3_client, bucket_name):
+    try:
+        policy = s3_client.get_bucket_policy(Bucket=args.bucket_name)
+        policy_str = policy["Policy"]
+        print(policy_str)
+    except ClientError as e:
+        logging.error(e)
+        return False
+
+def set_object_access_policy(s3_client, bucket_name, file_name):
+    try:
+        response = s3_client.put_object_acl(
+            ACL="public-read",
+            Bucket=args.bucket_name,
+            Key=args.file_name
+        )
+    except ClientError as e:
+        logging.error(e)
+        return False
+    status_code = response["ResponseMetadata"]["HTTPStatusCode"]
+    if status_code == 200:
+        return True
+    return False
+
+def lifecycle(s3_client, bucket_name, days):
+    lifecycle_config = {
+        'Rules': [
+            {
+                'ID': 'Delete after {} days'.format(args.days),
+                'Status': 'Enabled',
+                'Prefix': '',
+                'Expiration': {
+                    'Days': args.days
+                }
+            }
+        ]
+    }
+    s3_client.put_bucket_lifecycle_configuration(
+        Bucket=args.bucket_name, LifecycleConfiguration=lifecycle_config)
+    print(f'Bucket {args.bucket_name} will be deleted in {args.days} days ')
+
+def delete_file(s3_client, bucket_name, file_name):
+    response = s3_client.delete_object(
+        Bucket=args.bucket_name, Key=args.file_name)
+    print(f'{args.file_name} file has just been deleted')
 
 if __name__ == "__main__":
     s3_client = init_client()
@@ -192,9 +245,15 @@ for bucket in response['Buckets']:
 else:
     print(f'bucket {args.bucket_name} does not exist')
 
+if args.tool == 'read_bucket_policy' or args.tool == 'rbp':
+    read_bucket_policy(s3_client, args.bucket_name)
+if args.tool == 'create_bucket_policy' or args.tool == 'cbp':
+    create_bucket_policy(s3_client, args.bucket_name)    
 if args.tool == "download_upload":
     download_upload(s3_client, args.bucket_name, args.url,
                     args.file_name, keep_local=False)
+if args.tool == 'lifecycle':
+    lifecycle(s3_client, args.bucket_name, args.days)
 if args.tool == 'file_with_bigsize_upload':
     meme = args.filepath.split('.')[-1]
     if args.memetype == meme:
@@ -202,3 +261,5 @@ if args.tool == 'file_with_bigsize_upload':
                                  args.filepath, args.threshold)
     else:
         print(f'{meme} uploading file with such exstension is impossible')
+if args.delete == True:
+    delete_file(s3_client, args.bucket_name, args.file_name)
