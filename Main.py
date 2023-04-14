@@ -155,6 +155,7 @@ def file_with_bigsize_upload(s3_client, bucket_name, file_name, file_path, thres
             f, bucket_name, object_key, Config=config)
     print(f'{file_name} was uploaded successfully')
 
+
 def create_bucket_policy(s3_client, bucket_name):
     s3_client.put_bucket_policy(
         Bucket=bucket_name, Policy=generate_public_read_policy(
@@ -172,6 +173,7 @@ def read_bucket_policy(s3_client, bucket_name):
         logging.error(e)
         return False
 
+
 def set_object_access_policy(s3_client, bucket_name, file_name):
     try:
         response = s3_client.put_object_acl(
@@ -186,6 +188,7 @@ def set_object_access_policy(s3_client, bucket_name, file_name):
     if status_code == 200:
         return True
     return False
+
 
 def lifecycle(s3_client, bucket_name, days):
     lifecycle_config = {
@@ -204,10 +207,12 @@ def lifecycle(s3_client, bucket_name, days):
         Bucket=bucket_name, LifecycleConfiguration=lifecycle_config)
     print(f'Bucket {bucket_name} will be deleted in {days} days ')
 
+
 def delete_file(s3_client, bucket_name, file_name):
     response = s3_client.delete_object(
         Bucket=bucket_name, Key=file_name)
     print(f'{file_name} file has just been deleted')
+
 
 def previous_version(s3_client, bucket_name, file_name):
     try:
@@ -247,15 +252,14 @@ def versioning(s3_client, bucket_name):
     except:
         print(f'On bucket {bucket_name} versioning is turned off')
 
+
 def upload_file_to_s3_with_magic(s3_client, bucket_name, file_name, file_path):
     file_mime_type = magic.from_file(file_path, mime=True)
     file_extension = file_mime_type.split('/')[-1] + '/' + file_name
-    
+
     with open(file_path, 'rb') as file:
         s3_client.upload_fileobj(file, bucket_name, file_extension)
         print(f'{file_name} has been successfully uploaded to {bucket_name}')
-
-
 
 
 def delete_old_versions(s3_client, bucket_name, file_name, days):
@@ -278,12 +282,15 @@ def delete_old_versions(s3_client, bucket_name, file_name, days):
         if delta.days > days:
             s3_client.delete_object(
                 Bucket=bucket_name, Key=file_name, VersionId=version_id)
-            print(f'The version {version_id} has been deleted as it was created more than {days} days ago')
+            print(
+                f'The version {version_id} has been deleted as it was created more than {days} days ago')
+
 
 def upload_html_file(s3_client, bucket_name, file_path, object_key):
     with open(file_path, 'rb') as f:
         s3_client.upload_fileobj(f, bucket_name, object_key, ExtraArgs={
-                                'ContentType': 'text/html'})
+            'ContentType': 'text/html'})
+
 
 def configure_static_website(s3_client, bucket_name):
     website_configuration = {
@@ -294,6 +301,7 @@ def configure_static_website(s3_client, bucket_name):
         Bucket=bucket_name, WebsiteConfiguration=website_configuration)
     print("Static website hosted successfully!")
 
+
 def upload_source_to_s3(s3_client, bucket_name, local_folder_path):
     for root, dirs, files in os.walk(local_folder_path):
         for file in files:
@@ -301,17 +309,64 @@ def upload_source_to_s3(s3_client, bucket_name, local_folder_path):
             s3_key = os.path.relpath(
                 local_file_path, local_folder_path).replace('\\', '/')
             s3_client.upload_source(local_file_path, bucket_name, s3_key, ExtraArgs={
-                                  'ContentType': 'text/html'})
+                'ContentType': 'text/html'})
+
 
 def create_and_configure_bucket(s3_client, bucket_name):
     s3_client.create_bucket(Bucket=bucket_name)
     create_bucket_policy(s3_client, bucket_name)
     configure_static_website(s3_client, bucket_name)
 
+
 def get_s3_website_url(s3_client, bucket_name):
     response = s3_client.get_bucket_location(Bucket=bucket_name)
     region = response.get('LocationConstraint', 'us-east-1')
     return f"http://{bucket_name}.s3-website-{region}.amazonaws.com"
+
+
+def get_quote_stats(quotes):
+    stats = {"quotes": 0}
+
+    for index, quote in enumerate(quotes):
+        author = quote["author"]
+        if author not in stats:
+            stats[author] = {"quote_index": [index], "quotes_available": 1}
+        else:
+            stats[author]["quote_index"].append(index)
+            stats[author]["quotes_available"] += 1
+
+        stats["quotes"] += 1
+
+    return stats
+
+
+def main():
+    headers = {
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36",
+    }
+
+    with urlopen(Request("https://type.fit/api/quotes", data=None, headers=headers)) as response:
+        quotes = json.loads(response.read().decode())
+
+        if args.inspire == "true":
+            print(json.dumps(choice(quotes)["text"], indent=4))
+        else:
+            quote_stats = get_quote_stats(quotes)
+
+            for quote in quotes:
+                if quote["author"] == args.inspire:
+                    print(quote["text"])
+                    if args.save:
+                        with open("quotes.json", "w") as f:
+                            json.dump(quote, f)
+
+                        with open("quotes.json", "rb") as f:
+                            s3_client.upload_fileobj(
+                                f, args.bucket_name, "quotes.json")
+                            print(
+                                f'quotes.json was uploaded to {args.bucket_name} bucket')
+
+                    break
 
 
 if __name__ == "__main__":
@@ -348,7 +403,7 @@ else:
 if args.tool == 'read_bucket_policy' or args.tool == 'rbp':
     read_bucket_policy(s3_client, args.bucket_name)
 if args.tool == 'create_bucket_policy' or args.tool == 'cbp':
-    create_bucket_policy(s3_client, args.bucket_name)    
+    create_bucket_policy(s3_client, args.bucket_name)
 if args.tool == "download_upload":
     download_upload(s3_client, args.bucket_name, args.url,
                     args.file_name, keep_local=False)
@@ -371,11 +426,13 @@ if args.previous_version == True:
     previous_version(s3_client, args.bucket_name, args.file_name)
 if args.tool == "upload_file_to_s3_with_magic":
     upload_file_to_s3_with_magic(s3_client, args.bucket_name,
-                      args.file_name, args.filepath)
+                                 args.file_name, args.filepath)
 if args.tool == "delete_old_versions":
-    delete_old_versions(args.s3_client, args.bucket_name, args.file_name, args.days)
+    delete_old_versions(args.s3_client, args.bucket_name,
+                        args.file_name, args.days)
 if args.tool == "static_website":
-    upload_html_file(s3_client, args.bucket_name, args.filepath, args.file_name)
+    upload_html_file(s3_client, args.bucket_name,
+                     args.filepath, args.file_name)
     configure_static_website(s3_client, args.bucket_name)
 if args.tool == "upload_and_host":
     create_and_configure_bucket(args.s3_client, args.bucket_name)
